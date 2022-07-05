@@ -190,6 +190,8 @@ class ApiClient {
           }
           final valueString = '$value'.toLowerCase();
           return valueString == 'true' || valueString == '1';
+        case 'DateTime':
+          return value is DateTime ? value : DateTime.tryParse(value);
         case 'AdditionalPropertiesClass':
           return AdditionalPropertiesClass.fromJson(value);
         case 'AllOfWithSingleRef':
@@ -230,14 +232,14 @@ class ApiClient {
           return FileSchemaTestClass.fromJson(value);
         case 'Foo':
           return Foo.fromJson(value);
+        case 'FooGetDefaultResponse':
+          return FooGetDefaultResponse.fromJson(value);
         case 'FormatTest':
           return FormatTest.fromJson(value);
         case 'HasOnlyReadOnly':
           return HasOnlyReadOnly.fromJson(value);
         case 'HealthCheckResult':
           return HealthCheckResult.fromJson(value);
-        case 'InlineResponseDefault':
-          return InlineResponseDefault.fromJson(value);
         case 'MapTest':
           return MapTest.fromJson(value);
         case 'MixedPropertiesAndAdditionalPropertiesClass':

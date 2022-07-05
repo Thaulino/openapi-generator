@@ -202,6 +202,31 @@ class ValidatorBase:
                     )
 
     @classmethod
+    def __data_with_boolclass_instead_of_bool(cls, data: typing.Any) -> typing.Any:
+        """
+        In python bool is a subclass of int so 1 == True and 0 == False
+        This prevents code from being able to see the difference between 1 and True and 0 and False
+        To fix this swap in BoolClass singletons for True and False so they will differ from integers
+        """
+        if isinstance(data, (list, tuple)):
+            new_data = []
+            for item in data:
+                new_item = cls.__data_with_boolclass_instead_of_bool(item)
+                new_data.append(new_item)
+            return tuple(new_data)
+        elif isinstance(data, (dict, frozendict)):
+            new_data = {}
+            for key, value in data.items():
+                new_value = cls.__data_with_boolclass_instead_of_bool(value)
+                new_data[key] = new_value
+            return frozendict(new_data)
+        elif isinstance(data, bool):
+            if data:
+                return BoolClass.TRUE
+            return BoolClass.FALSE
+        return data
+
+    @classmethod
     def __check_tuple_validations(
             cls, validations, input_values,
             validation_metadata: ValidationMetadata):
@@ -228,10 +253,7 @@ class ValidatorBase:
 
         if (cls.__is_json_validation_enabled('uniqueItems', validation_metadata.configuration) and
                 'unique_items' in validations and validations['unique_items'] and input_values):
-            unique_items = []
-            for item in input_values:
-                if item not in unique_items:
-                    unique_items.append(item)
+            unique_items = set(cls.__data_with_boolclass_instead_of_bool(input_values))
             if len(input_values) > len(unique_items):
                 cls.__raise_validation_error_message(
                     value=input_values,
@@ -478,10 +500,7 @@ class Singleton:
     """
     _instances = {}
 
-    def __new__(cls, *args, **kwargs):
-        if not args:
-            raise ValueError('arg must be passed')
-        arg = args[0]
+    def __new__(cls, arg: typing.Any, **kwargs):
         key = (cls, arg)
         if key not in cls._instances:
             if arg in {None, True, False}:
@@ -508,9 +527,6 @@ class NoneClass(Singleton):
     def NONE(cls):
         return cls(None)
 
-    def is_none(self) -> bool:
-        return True
-
     def __bool__(self) -> bool:
         return False
 
@@ -533,19 +549,36 @@ class BoolClass(Singleton):
                 return key[1]
         raise ValueError('Unable to find the boolean value of this instance')
 
-    def is_true(self):
-        return bool(self)
-
-    def is_false(self):
-        return bool(self)
-
 
 class BoolBase:
-    pass
+    def is_true(self) -> bool:
+        """
+        A replacement for x is True
+        True if the instance is a BoolClass True Singleton
+        """
+        if not issubclass(self.__class__, BoolClass):
+            return False
+        return bool(self)
+
+    def is_false(self) -> bool:
+        """
+        A replacement for x is False
+        True if the instance is a BoolClass False Singleton
+        """
+        if not issubclass(self.__class__, BoolClass):
+            return False
+        return bool(self) is False
 
 
 class NoneBase:
-    pass
+    def is_none(self) -> bool:
+        """
+        A replacement for x is None
+        True if the instance is a NoneClass None Singleton
+        """
+        if issubclass(self.__class__, NoneClass):
+            return True
+        return False
 
 
 class StrBase:
@@ -1861,8 +1894,9 @@ class IntBase(NumberBase):
     @classmethod
     def _validate_format(cls, arg: typing.Optional[decimal.Decimal], validation_metadata: ValidationMetadata):
         if isinstance(arg, decimal.Decimal):
-            exponent = arg.as_tuple().exponent
-            if exponent != 0:
+
+            denominator = arg.as_integer_ratio()[-1]
+            if denominator != 1:
                 raise ApiValueError(
                     "Invalid value '{}' for type integer at {}".format(arg, validation_metadata.path_to_item)
                 )
